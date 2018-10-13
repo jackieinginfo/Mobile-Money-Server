@@ -1,1 +1,1 @@
-# Mobile-Money-Server
+# ServerApp

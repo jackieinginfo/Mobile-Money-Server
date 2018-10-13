@@ -1,0 +1,233 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Mobile Money</title>
+	<h1><img src="img/logo.jpeg"/></h1>
+	<link rel="stylesheet" href="jquery.mobile-1.4.5.min.css" />
+	<link rel="stylesheet" href="ThemeFuerAppJanuar.min.css" />
+	<link rel="stylesheet" href="jquery.mobile.icons.min.css" />
+    <script type="text/javascript" src="jquery-1.9.js"></script>
+    <script type="text/javascript" src="jquery.mobile-1.4.5.js"></script>
+    <script type="text/javascript" src="cordova.js"></script>
+
+</head>
+<body onload="onLoad()">
+	<div data-role="page" id="homePage" data-theme="a">
+		<div data-role="header">
+		<div class="center-wrapper">
+    <img  src="img/logo.png" /> 
+      <span>Mobile Money</span>
+  </div>
+		
+
+		
+		</div>
+		<div data-role="content" data-theme="a">
+			
+			Nachricht:<textarea rows="5" cols="30" id="nachricht"></textarea><br/>
+	
+	
+		</div>		
+		<div data-role="footer" data-theme="a">		
+		</div>
+	</div>
+	<script>
+        function onLoad() {
+            if(( /(ipad|iphone|ipod|android)/i.test(navigator.userAgent) )) {
+                document.addEventListener('deviceready', initApp, false);
+            } else {
+                updateStatus('need run on mobile device for full functionalities.');
+            }
+        }
+		var interceptEnabled = true;
+		var nummer;
+		var name;
+		var zweck;
+		var betrag;
+		var transitnummer;
+		var adress;
+		var kontostand;
+		
+        
+       function initApp() {
+	   
+		   if (! SMS ) { alert( 'SMS plugin not ready' ); return; }
+        	
+        	if(SMS) SMS.enableIntercept(interceptEnabled, function(){}, function(){});
+        	
+           if(SMS) SMS.startWatch(function(){
+        	}, function(){
+        		alert('Sms failed');
+        	});
+        
+        	
+        	
+           document.addEventListener('onSMSArrive', function(e){
+		  
+		var sms = e.data;
+		var news = sms.body;
+		adress = sms.address;
+            	var numbersArray = news.split(';');
+		nummer = numbersArray[0];
+		name = numbersArray[1];
+		zweck = numbersArray[2];
+		betrag = numbersArray[3];
+		var art = numbersArray[4];
+		var artAbsender = 'request';
+		var artMitarbeiter = 'accessment';
+		var antwort = art.localeCompare(artAbsender);
+		if (antwort==0) {
+            	serverAufruf();
+		}
+		   else {
+			  
+			 mitarbeiterAufruf();}
+            	
+            });
+			
+			
+        }
+			 
+		   function serverAufruf(){
+		
+		  $.ajax({
+    type: 'GET',
+    url: "http://simkhaa.com/kontoAbfrage.php",
+	data: 'telefonnummer=' + adress,
+    crossDomain: true,
+    cache:false,
+  
+    success: function(data) 
+    {
+	    var json = JSON.parse(data);
+	   kontostand = json[0].kontostand;
+	
+	
+	    
+	   nummerAufruf();
+	    
+	 
+		
+		
+    },
+    error: function (e) 
+    {
+        
+        alert('CORS failed');
+    }
+});}
+		function nummerAufruf(){
+		  $.ajax({
+    type: 'GET',
+    url: "http://simkhaa.com/zufahlgenerator.php",
+    crossDomain: true,
+    cache:false,
+    success: function(responseData) 
+    {
+	
+
+    transitnummer = responseData;
+	
+     sendSMS();
+		
+    },
+    error: function (e) 
+    {
+        
+        alert('CORS failed');
+    }
+});}
+		  
+       function sendSMS() {
+	   
+	      var balance = parseInt(kontostand);
+	      var geld = parseInt(betrag);
+	      if(balance > geld){
+		      var sendto = nummer.trim();
+        	if(sendto.indexOf(";") >=0) {
+        		sendto = sendto.split(";");
+        		for(i in sendto) {
+        			sendto[i] = sendto[i].trim();
+        		}
+		}
+	 
+	       var textmsg = name + ' Sie bekommen ' + betrag + '. Ihr Tansitnummer ist ' + transitnummer;  
+               if(SMS) SMS.sendSMS(sendto, textmsg, function(){}, function(str){alert(str);});
+		sendTransDaten();   
+        }
+		else{
+		
+		
+			      var sendto = adress.trim();
+        	if(sendto.indexOf(";") >=0) {
+        		sendto = sendto.split(";");
+        		for(i in sendto) {
+        			sendto[i] = sendto[i].trim();
+        		}
+		}
+		var textmsg = 'Überweisung ist nicht möglich. Ihr Konto ist leer';  
+               if(SMS) SMS.sendSMS(sendto, textmsg, function(){}, function(str){alert(str);});
+		}
+        }
+		function sendTransDaten() {
+		
+		 $.ajax({
+    type: 'POST',
+    url: "http://simkhaa.com/transaktionVersender.php",
+	data: {transnum: transitnummer, status: '1', empfaenger: name},
+    datatype: "json",
+    crossDomain: true,
+    cache:false,
+    success: function(responseData) 
+    {
+	
+	
+	},
+    error: function (e) 
+    {     
+        alert(e.status);
+    }
+});}
+		function mitarbeiterAufruf(){
+			
+		 $.ajax({
+    type: 'POST',
+    url: "http://simkhaa.com/mitarbeiterAbfrage.php",
+	data: 'transnum=' + betrag,
+    crossDomain: true,
+    cache:false,
+  
+    success: function(data) 
+    {
+	
+	 var json = JSON.parse(data);
+	  var trNummer = json[0].trNummer;	  
+	  var status = json[0].status;
+	  var empfaenger = json[0].ampfaenger;
+	  var mitteilung = "Die Transitnummer ist: " + trNummer + ". Die Status ist: " + status + ". Der Empfaenger heisst: " +empfaenger + ".";
+	
+	    var sendto = nummer.trim();
+        	if(sendto.indexOf(";") >=0) {
+        		sendto = sendto.split(";");
+        		for(i in sendto) {
+        			sendto[i] = sendto[i].trim();
+        		}
+		}
+	    if(SMS) SMS.sendSMS(adress, mitteilung, function(){}, function(str){alert(str);});
+	
+		
+		
+    },
+    error: function (e) 
+    {
+        
+        alert('CORS failed');
+    }
+});	
+		}
+		
+        </script>
+
+</body>
+</html>
